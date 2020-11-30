@@ -25,6 +25,7 @@ use Magento\Framework\Exception\NoSuchEntityException;
 use Magento\Framework\Webapi\Exception as HTTPExceptionCodes;
 use Magento\Integration\Api\AdminTokenServiceInterface;
 use Magento\Store\Api\Data\StoreInterface;
+use Magento\Store\Api\StoreWebsiteRelationInterface;
 use Magento\Store\Model\Store;
 use Magento\Store\Model\StoreRepository;
 use Magento\Store\Model\Website;
@@ -251,6 +252,58 @@ class ProductRepositoryInterfaceTest extends WebapiAbstract
         $this->assertEquals(
             $response[ProductInterface::EXTENSION_ATTRIBUTES_KEY]["website_ids"],
             $websitesData["website_ids"]
+        );
+    }
+
+    /**
+     * Test removing association between product and website 1 then chek url rewrite removed
+     * Assign website back and check rewrite generated
+     *
+     * @magentoApiDataFixture Magento/Catalog/_files/product_two_websites.php
+     */
+    public function testUpdateRewriteWithChangeWebsites()
+    {
+        /** @var Website $website */
+        $website = $this->loadWebsiteByCode('test');
+
+        $productBuilder[ProductInterface::SKU] = 'simple-on-two-websites';
+        $productBuilder[ProductInterface::EXTENSION_ATTRIBUTES_KEY] = [
+            'website_ids' => [
+                $website->getId(),
+            ]
+        ];
+        $objectManager = Bootstrap::getObjectManager();
+        /** @var StoreWebsiteRelationInterface $storeWebsiteRelation */
+        $storeWebsiteRelation = $objectManager->get(StoreWebsiteRelationInterface::class);
+        /** @var ProductRepositoryInterface $productRepository */
+        $productRepository = $objectManager->get(ProductRepositoryInterface::class);
+
+        $baseWebsite = $this->loadWebsiteByCode('base');
+        $storeIds = $storeWebsiteRelation->getStoreByWebsiteId($baseWebsite->getId());
+        $product = $productRepository->get($productBuilder[ProductInterface::SKU], false, reset($storeIds));
+        $this->assertStringContainsString(
+            $product->getUrlKey() . '.html',
+            $product->getProductUrl()
+        );
+
+        $this->updateProduct($productBuilder);
+
+        $product->setRequestPath('');
+        $this->assertStringNotContainsString(
+            $product->getUrlKey() . '.html',
+            $product->getProductUrl()
+        );
+        $productBuilder[ProductInterface::EXTENSION_ATTRIBUTES_KEY] = [
+            'website_ids' => [
+                $website->getId(), $baseWebsite->getId()
+            ]
+        ];
+
+        $this->updateProduct($productBuilder);
+        $product->setRequestPath('');
+        $this->assertStringContainsString(
+            $product->getUrlKey() . '.html',
+            $product->getProductUrl()
         );
     }
 
