@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace Magento\GraphQl\Quote\Customer;
 
+use Magento\Customer\Api\AddressMetadataInterface;
 use Magento\Customer\Api\AddressRepositoryInterface;
 use Magento\Customer\Api\CustomerRepositoryInterface;
 use Magento\Framework\Api\SearchCriteriaBuilder;
@@ -63,6 +64,11 @@ class SetShippingAddressOnCartTest extends GraphQlAbstract
      */
     private $customerRepository;
 
+    /**
+     * @var AddressMetadataInterface
+     */
+    private $addressMetadata;
+
     protected function setUp(): void
     {
         $objectManager = Bootstrap::getObjectManager();
@@ -74,6 +80,7 @@ class SetShippingAddressOnCartTest extends GraphQlAbstract
         $this->customerAddressRepository = $objectManager->get(AddressRepositoryInterface::class);
         $this->searchCriteriaBuilder = $objectManager->get(SearchCriteriaBuilder::class);
         $this->customerRepository = $objectManager->get(CustomerRepositoryInterface::class);
+        $this->addressMetadata = Bootstrap::getObjectManager()->get(AddressMetadataInterface::class);
     }
 
     /**
@@ -658,6 +665,8 @@ QUERY;
      */
     public function testSetNewShippingAddressOnCartWithRedundantStreetLine()
     {
+        $streetLineCount = $this->addressMetadata->getAttributeMetadata('street')->getMultilineCount();
+        $street = implode('","', array_fill(0, $streetLineCount + 1, 'Line'));
         $maskedQuoteId = $this->getMaskedQuoteIdByReservedOrderId->execute('test_quote');
 
         $query = <<<QUERY
@@ -671,7 +680,7 @@ mutation {
             firstname: "test firstname"
             lastname: "test lastname"
             company: "test company"
-            street: ["test street 1", "test street 2", "test street 3"]
+            street: ["{$street}"]
             city: "test city"
             region: "AZ"
             region_id: 4
@@ -692,7 +701,7 @@ mutation {
 }
 QUERY;
 
-        self::expectExceptionMessage('"Street Address" cannot contain more than 2 lines.');
+        self::expectExceptionMessage('"Street Address" cannot contain more than ' . $streetLineCount . ' lines.');
         $this->graphQlMutation($query, [], '', $this->getHeaderMap());
     }
 

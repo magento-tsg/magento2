@@ -8,6 +8,7 @@ declare(strict_types=1);
 namespace Magento\GraphQl\Customer;
 
 use Exception;
+use Magento\Customer\Api\AddressMetadataInterface;
 use Magento\Customer\Api\AddressRepositoryInterface;
 use Magento\Customer\Api\Data\AddressInterface;
 use Magento\Integration\Api\CustomerTokenServiceInterface;
@@ -29,12 +30,18 @@ class CreateCustomerAddressTest extends GraphQlAbstract
      */
     private $addressRepository;
 
+    /**
+     * @var AddressMetadataInterface
+     */
+    private $addressMetadata;
+
     protected function setUp(): void
     {
         parent::setUp();
 
         $this->customerTokenService = Bootstrap::getObjectManager()->get(CustomerTokenServiceInterface::class);
         $this->addressRepository = Bootstrap::getObjectManager()->get(AddressRepositoryInterface::class);
+        $this->addressMetadata = Bootstrap::getObjectManager()->get(AddressMetadataInterface::class);
     }
 
     /**
@@ -397,6 +404,7 @@ MUTATION;
      */
     public function testCreateCustomerAddressWithRedundantStreetLine()
     {
+        $streetLineCount = $this->addressMetadata->getAttributeMetadata('street')->getMultilineCount();
         $newAddress = [
             'region' => [
                 'region' => 'Arizona',
@@ -404,7 +412,7 @@ MUTATION;
                 'region_code' => 'AZ'
             ],
             'country_code' => 'US',
-            'street' => ['Line 1 Street', 'Line 2', 'Line 3'],
+            'street' => array_fill(0, $streetLineCount + 1, 'Line'),
             'company' => 'Company name',
             'telephone' => '123456789',
             'fax' => '123123123',
@@ -419,7 +427,7 @@ MUTATION;
             'default_shipping' => true,
             'default_billing' => false
         ];
-
+        $street = implode('","', $newAddress['street']);
         $mutation
             = <<<MUTATION
 mutation {
@@ -430,7 +438,7 @@ mutation {
         region_code: "{$newAddress['region']['region_code']}"
     }
     country_code: {$newAddress['country_code']}
-    street: ["{$newAddress['street'][0]}","{$newAddress['street'][1]}","{$newAddress['street'][2]}"]
+    street: ["{$street}"]
     company: "{$newAddress['company']}"
     telephone: "{$newAddress['telephone']}"
     fax: "{$newAddress['fax']}"
@@ -453,7 +461,7 @@ MUTATION;
         $userName = 'customer@example.com';
         $password = 'password';
 
-        self::expectExceptionMessage('"Street Address" cannot contain more than 2 lines.');
+        self::expectExceptionMessage('"Street Address" cannot contain more than ' . $streetLineCount . ' lines.');
         $this->graphQlMutation($mutation, [], '', $this->getCustomerAuthHeaders($userName, $password));
     }
 

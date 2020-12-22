@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace Magento\GraphQl\Quote\Guest;
 
+use Magento\Customer\Api\AddressMetadataInterface;
 use Magento\GraphQl\Quote\GetMaskedQuoteIdByReservedOrderId;
 use Magento\TestFramework\Helper\Bootstrap;
 use Magento\TestFramework\TestCase\GraphQlAbstract;
@@ -21,10 +22,16 @@ class SetShippingAddressOnCartTest extends GraphQlAbstract
      */
     private $getMaskedQuoteIdByReservedOrderId;
 
+    /**
+     * @var AddressMetadataInterface
+     */
+    private $addressMetadata;
+
     protected function setUp(): void
     {
         $objectManager = Bootstrap::getObjectManager();
         $this->getMaskedQuoteIdByReservedOrderId = $objectManager->get(GetMaskedQuoteIdByReservedOrderId::class);
+        $this->addressMetadata = Bootstrap::getObjectManager()->get(AddressMetadataInterface::class);
     }
 
     /**
@@ -218,6 +225,8 @@ QUERY;
      */
     public function testSetNewShippingAddressOnCartWithRedundantStreetLine()
     {
+        $streetLineCount = $this->addressMetadata->getAttributeMetadata('street')->getMultilineCount();
+        $street = implode('","', array_fill(0, $streetLineCount + 1, 'Line'));
         $maskedQuoteId = $this->getMaskedQuoteIdByReservedOrderId->execute('test_quote');
 
         $query = <<<QUERY
@@ -231,7 +240,7 @@ mutation {
             firstname: "test firstname"
             lastname: "test lastname"
             company: "test company"
-            street: ["test street 1", "test street 2", "test street 3"]
+            street: ["{$street}"]
             city: "test city"
             region: "AL"
             postcode: "887766"
@@ -250,7 +259,7 @@ mutation {
   }
 }
 QUERY;
-        self::expectExceptionMessage('"Street Address" cannot contain more than 2 lines.');
+        self::expectExceptionMessage('"Street Address" cannot contain more than ' . $streetLineCount . ' lines.');
         $this->graphQlMutation($query);
     }
 
